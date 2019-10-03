@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -26,6 +27,7 @@ public class Sign_in extends AppCompatActivity {
     private TextView signUpLink;
     private EditText mEmail;
     private EditText mPassword;
+    private TextView mforgotPassword;
     private ProgressBar mBar;
 
     //firebase variables
@@ -42,14 +44,24 @@ public class Sign_in extends AppCompatActivity {
         signUpLink = findViewById(R.id.sign_up);
         mEmail = findViewById(R.id.txt_username);
         mPassword = findViewById(R.id.txt_password);
+        mforgotPassword=findViewById(R.id.forgot_password);
         mBar = findViewById(R.id.progressBar);
 
         mBar.setVisibility(View.INVISIBLE);
+
+
 
         signUpLink.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startActivity(new Intent(Sign_in.this,Sign_up.class));
+                finish();
+            }
+        });
+        mforgotPassword.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startActivity(new Intent(Sign_in.this,Forget_password.class));
                 finish();
             }
         });
@@ -80,7 +92,8 @@ public class Sign_in extends AppCompatActivity {
                         public void onFailure(@NonNull Exception e) {
                             Toast.makeText(Sign_in.this, "Authentication Failed: "  + e.getMessage(), Toast.LENGTH_LONG).show();
                         }
-                    });
+                    })
+            ;
         }
     }
 }
