@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ShareCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -285,6 +286,15 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
                     Toast.makeText(Chat_screen.this, "Signed out", Toast.LENGTH_LONG).show();
                     startActivity(mine);
                     finish();
+                }
+                return true;
+            case R.id.share:
+                Intent shareIntent = ShareCompat.IntentBuilder.from(this)
+                        .setType("text/plain")
+                        .setText("https://drive.google.com/open?id=1CbBSD_y3e1PGjJnGLawq9LlqF6UuN02B")
+                        .getIntent();
+                if (shareIntent.resolveActivity(getPackageManager()) != null) {
+                    startActivity(shareIntent);
                 }
                 return true;
         }
