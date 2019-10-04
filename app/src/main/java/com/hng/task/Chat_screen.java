@@ -9,6 +9,8 @@ import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.Image;
@@ -16,6 +18,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.speech.RecognizerIntent;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.Gravity;
@@ -47,6 +50,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import ai.api.AIDataService;
 import ai.api.AIListener;
@@ -60,6 +64,7 @@ import ai.api.model.Result;
 
 public class Chat_screen extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener, AIListener {
 
+    private final int VOICE_REQUEST_CODE = 100;
     private static final String TAG = "Chat Screen";
 
     //firebase variables
@@ -72,6 +77,7 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
     private ImageView mBack;
     private EditText txtMessage;
     private ImageView sendMessage;
+    private ImageView sendVoiceMessage;
     private TextView name;
     private ImageView profilePicture;
 
@@ -86,6 +92,8 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
     DatabaseReference ref;
     FirebaseRecyclerAdapter<ChatMessage,chat_rec> adapter;
     private AIService aiService;
+    private AIDataService mAiDataService;
+    private AIRequest mAiRequest;
 
 
     @Override
@@ -104,6 +112,7 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
         txtMessage = findViewById(R.id.txt_message);
         txtMessage.setMovementMethod(new ScrollingMovementMethod());
         sendMessage = findViewById(R.id.send_message);
+        sendVoiceMessage = findViewById(R.id.send_voice_message);
 
         //NavigationView Widgets
         NavigationView navigationView = findViewById(R.id.navigation_view);
@@ -139,9 +148,9 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
         aiService = AIService.getService(this, config);
         aiService.setListener(this);
 
-        final AIDataService aiDataService = new AIDataService(config);
+        mAiDataService = new AIDataService(config);
 
-        final AIRequest aiRequest = new AIRequest();
+        mAiRequest = new AIRequest();
 
 
 //        mChatRecyclerViewAdapter = new ChatRecyclerViewAdapter(this, mChatMessages);
@@ -149,6 +158,24 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
 
         //listeners
         setNavigationViewListener();
+
+        sendVoiceMessage.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+                intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Need to speak");
+                try {
+                    startActivityForResult(intent, VOICE_REQUEST_CODE);
+                } catch (ActivityNotFoundException a) {
+                    Toast.makeText(getApplicationContext(),
+                            "Sorry your device not supported",
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
 
         mBack.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -160,59 +187,7 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
         sendMessage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                String message = txtMessage.getText().toString();
-                /*ChatMessage botMessage = new ChatMessage(message, "chatBot");
-                mChatMessages.add(userMessage);
-                mChatMessages.add(botMessage);
-                txtMessage.setText("");
-                mChatRecyclerViewAdapter.notifyDataSetChanged();*/
-
-                if (!message.equals("")) {
-                    ChatMessage userMessage = new ChatMessage(message, "user");
-                    mChatMessages.add(userMessage);
-                    ref.child("chat").child(mAuth.getCurrentUser().getUid()).push().setValue(userMessage);
-
-                    aiRequest.setQuery(message);
-                    new AsyncTask<AIRequest,Void,AIResponse>(){
-
-                        @Override
-                        protected AIResponse doInBackground(AIRequest... aiRequests) {
-                            final AIRequest request = aiRequests[0];
-                            try {
-                                final AIResponse response = aiDataService.request(aiRequest);
-                                return response;
-                            } catch (AIServiceException e) {
-                            }
-                            return null;
-                        }
-                        @Override
-                        protected void onPostExecute(AIResponse response) {
-                            if (response != null) {
-
-                                Result result = response.getResult();
-                                String reply = result.getFulfillment().getSpeech();
-                                ChatMessage botMessage = new ChatMessage(reply, "chatbot");
-                                mChatMessages.add(botMessage);
-                                ref.child("chat").child(mAuth.getCurrentUser().getUid()).push().setValue(botMessage);
-                            }
-                        }
-                    }.execute(aiRequest);
-                }
-                else {
-                    aiService.startListening();
-                }
-//                int newMsgPosition = mChatMessages.size() - 1;
-//                adapter.notifyDataSetChanged();
-//                mRecyclerView.smoothScrollToPosition(newMsgPosition);
-
-                mRecyclerView.getLayoutManager().smoothScrollToPosition(mRecyclerView,new RecyclerView.State(), mRecyclerView.getAdapter().getItemCount());
-                txtMessage.setText("");
-                try  {
-                    InputMethodManager imm = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-                    imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
-                } catch (Exception e) {
-
-                }
+                sendMessageToBot(mAiRequest, mAiDataService);
 
             }
         });
@@ -259,6 +234,62 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
 
         mRecyclerView.setAdapter(adapter);
 
+    }
+
+    private void sendMessageToBot(final AIRequest aiRequest, final AIDataService aiDataService) {
+        String message = txtMessage.getText().toString();
+                /*ChatMessage botMessage = new ChatMessage(message, "chatBot");
+                mChatMessages.add(userMessage);
+                mChatMessages.add(botMessage);
+                txtMessage.setText("");
+                mChatRecyclerViewAdapter.notifyDataSetChanged();*/
+
+        if (!message.equals("")) {
+            ChatMessage userMessage = new ChatMessage(message, "user");
+            mChatMessages.add(userMessage);
+            ref.child("chat").child(mAuth.getCurrentUser().getUid()).push().setValue(userMessage);
+
+            aiRequest.setQuery(message);
+            new AsyncTask<AIRequest,Void, AIResponse>(){
+
+                @Override
+                protected AIResponse doInBackground(AIRequest... aiRequests) {
+                    final AIRequest request = aiRequests[0];
+                    try {
+                        final AIResponse response = aiDataService.request(aiRequest);
+                        return response;
+                    } catch (AIServiceException e) {
+                    }
+                    return null;
+                }
+                @Override
+                protected void onPostExecute(AIResponse response) {
+                    if (response != null) {
+
+                        Result result = response.getResult();
+                        String reply = result.getFulfillment().getSpeech();
+                        ChatMessage botMessage = new ChatMessage(reply, "chatbot");
+                        mChatMessages.add(botMessage);
+                        ref.child("chat").child(mAuth.getCurrentUser().getUid()).push().setValue(botMessage);
+                    }
+                }
+            }.execute(aiRequest);
+        }
+        else {
+            aiService.startListening();
+        }
+//                int newMsgPosition = mChatMessages.size() - 1;
+//                adapter.notifyDataSetChanged();
+//                mRecyclerView.smoothScrollToPosition(newMsgPosition);
+
+        mRecyclerView.getLayoutManager().smoothScrollToPosition(mRecyclerView,new RecyclerView.State(), mRecyclerView.getAdapter().getItemCount());
+        txtMessage.setText("");
+        try  {
+            InputMethodManager imm = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+        } catch (Exception e) {
+
+        }
     }
 
     private void chatbotAI(){
@@ -381,5 +412,21 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
             e.printStackTrace();
         }
 
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        switch (requestCode) {
+            case VOICE_REQUEST_CODE: {
+                if (resultCode == RESULT_OK && null != data) {
+                    ArrayList result = data
+                            .getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                    txtMessage.setText(result.get(0).toString());
+                    sendMessageToBot(mAiRequest, mAiDataService);
+                }
+                break;
+            }
+        }
     }
 }
