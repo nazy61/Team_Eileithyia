@@ -4,10 +4,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
@@ -27,6 +29,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FileDownloadTask;
 import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 import com.hng.task.models.User;
@@ -48,12 +51,14 @@ public class Profile extends AppCompatActivity {
     private EditText profileContact;
     private CircleImageView profileImage;
     private TextView logout;
+    private TextView saveDetails;
     private String g;
 
     //firebase variables
     private FirebaseAuth mAuth;
     private FirebaseDatabase mFirebaseDatabase;
     private DatabaseReference user;
+    private DatabaseReference users;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +70,7 @@ public class Profile extends AppCompatActivity {
         mFirebaseDatabase = FirebaseDatabase.getInstance();
         g = mAuth.getCurrentUser().getUid();
         user = mFirebaseDatabase.getReference("users").child(g);
+        users = mFirebaseDatabase.getReference("users");
 
         //init widgets
         profileName = findViewById(R.id.profileName);
@@ -72,11 +78,10 @@ public class Profile extends AppCompatActivity {
         profileContact = findViewById(R.id.profileContact);
         profileImage = findViewById(R.id.profilePicture);
         logout = findViewById(R.id.logout);
+        saveDetails = findViewById(R.id.save_details);
 
 
-        profileName.setEnabled(false);
-        profileEmail.setEnabled(false);
-        profileContact.setEnabled(false);
+        disableWidgets();
 
 
         user.addValueEventListener(new ValueEventListener() {
@@ -87,6 +92,8 @@ public class Profile extends AppCompatActivity {
                     profileName.setText(u.getFullName());
                     profileEmail.setText(u.getEmail());
                     profileContact.setText(u.getPhone());
+                } else {
+                    Toast.makeText(Profile.this, "Please Add Your Details", Toast.LENGTH_LONG).show();
                 }
             }
 
@@ -118,12 +125,68 @@ public class Profile extends AppCompatActivity {
                 startActivityForResult(intent.createChooser(intent, "Insert Picture"), PICTURE_RESULT);
             }
         });
+
+        saveDetails.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if(saveDetails.getText().toString().equalsIgnoreCase("save details")){
+                    if(TextUtils.isEmpty(profileName.getText().toString()) && profileName.getText().toString().length() < 3){
+                        Toast.makeText(Profile.this, "Please Enter a valid Name", Toast.LENGTH_LONG).show();
+                        return;
+                    } else if(TextUtils.isEmpty(profileEmail.getText().toString()) && !profileEmail.getText().toString().contains("@")){
+                        Toast.makeText(Profile.this, "Please Enter a valid Name", Toast.LENGTH_LONG).show();
+                        return;
+                    } else if(TextUtils.isEmpty(profileContact.getText().toString()) && profileContact.getText().toString().length() < 9){
+                        Toast.makeText(Profile.this, "Please Enter a valid Phone Number", Toast.LENGTH_LONG).show();
+                        return;
+                    } else {
+                        User user = new User();
+                        user.setFullName(profileName.getText().toString());
+                        user.setEmail(profileEmail.getText().toString());
+                        user.setPhone(profileContact.getText().toString());
+
+                        users.child(mAuth.getCurrentUser().getUid())
+                                .setValue(user)
+                                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                                    @Override
+                                    public void onSuccess(Void aVoid) {
+                                        Toast.makeText(Profile.this, "Update Successful", Toast.LENGTH_LONG).show();
+                                    }
+                                })
+                                .addOnFailureListener(new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(@NonNull Exception e) {
+                                        Toast.makeText(Profile.this, "Update Unsuccessful", Toast.LENGTH_LONG).show();
+                                    }
+                                });
+                    }
+                    saveDetails.setText("Update Profile");
+                    disableWidgets();
+                } else {
+                    saveDetails.setText("Save Details");
+                    enableWidgets();
+                }
+            }
+        });
+    }
+
+    private void disableWidgets() {
+        profileName.setEnabled(false);
+        profileEmail.setEnabled(false);
+        profileContact.setEnabled(false);
+    }
+
+    private void enableWidgets() {
+        profileName.setEnabled(true);
+        profileEmail.setEnabled(true);
+        profileContact.setEnabled(true);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PICTURE_RESULT && resultCode == RESULT_OK) {
+
             Uri imageUri = data.getData();
             final StorageReference ref = FirebaseStorage.getInstance().getReference().child(g + "/image");
             ref.putFile(imageUri).addOnSuccessListener(this, new OnSuccessListener<UploadTask.TaskSnapshot>() {
@@ -138,6 +201,11 @@ public class Profile extends AppCompatActivity {
                             Log.d(TAG, "name: " + pictureName);
                             Log.d(TAG, "url: " + url);
                             showImage(url);
+                        }
+                    }).addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception exception) {
+                            Toast.makeText(Profile.this, "Failed to Upload"+exception.getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
@@ -173,6 +241,7 @@ public class Profile extends AppCompatActivity {
                 @Override
                 public void onFailure(@NonNull Exception e) {
                     Toast.makeText(Profile.this, "Please Set Your Profile Image from the profile section", Toast.LENGTH_LONG).show();
+                    return;
                 }
             });
         } catch (IOException e) {

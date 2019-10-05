@@ -406,6 +406,7 @@ public class Chat_screen extends AppCompatActivity implements NavigationView.OnN
                 @Override
                 public void onFailure(@NonNull Exception e) {
                     Toast.makeText(Chat_screen.this, "Please Set Your Profile Image from the profile section", Toast.LENGTH_LONG).show();
+                    return;
                 }
             });
         } catch (IOException e) {
